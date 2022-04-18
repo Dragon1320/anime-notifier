@@ -1,0 +1,22 @@
+[package]
+name = "anime-notifier"
+version = "0.1.0"
+authors = ["Dragon1320", "CyanNyan"]
+edition = "2021"
+rust-version = "1.60"
+description = "The soon-to-be best anime notification service!"
+documentation = "https://github.com/Dragon1320/anime-notifier"
+readme = "README.md"
+homepage = "https://github.com/Dragon1320/anime-notifier"
+repository = "https://github.com/Dragon1320/anime-notifier"
+publish = false
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tracing = "0"
+tracing-subscriber = "0"
+#serde = "1"
+#serde_json = "1"
+#reqwest = "0"
+#axum = "0"
+#mongodb = "2"
