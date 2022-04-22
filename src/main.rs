@@ -7,5 +7,5 @@ async fn main() {
   info!("にゃ～");
 
   // run with: RUST_LOG=debug cargo run
-  debug!("owo hidden")
+  debug!("owo hidden");
 }
