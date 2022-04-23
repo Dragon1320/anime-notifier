@@ -1,0 +1,12 @@
+# you can set this with: NEKO_MESSAGE
+# note: env vars override fields set in the yaml
+message: にゃ～
+
+# you can set this with: NEKO_CAT_COLOUR
+cat:
+  colour: blue
+
+# app
+api:
+  ip: 127.0.0.1
+  port: 3000

@@ -1,9 +1,9 @@
 use std::net;
 
 use axum::{body::Body, routing::get, Router, Server};
+use tracing::info;
 
-// TODO: temp - remove
-type BoxResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync + 'static>>;
+use crate::err::BoxResult;
 
 pub struct Api {
   router: Router<Body>,
@@ -11,15 +11,15 @@ pub struct Api {
 
 impl Api {
   pub fn new() -> Self {
-    let router = Router::new().route("/healthz", get(|| async {}));
+    let router = Router::new().route("/", get(|| async {}));
 
     Self { router }
   }
 
-  pub async fn serve(self) -> BoxResult<()> {
-    // TODO: add this to config
-    // TODO: use some interesting port number?
-    let addr = net::SocketAddr::from(([127, 0, 0, 1], 3000));
+  pub async fn serve(self, ip: net::Ipv4Addr, port: u16) -> BoxResult<()> {
+    let addr = net::SocketAddr::from((ip, port));
+
+    info!("server listening on {}:{}", ip, port);
 
     Server::bind(&addr).serve(self.router.into_make_service()).await?;
 
