@@ -1,5 +1,7 @@
 use tracing::{debug, info};
 
+mod api;
+
 #[tokio::main]
 async fn main() {
   tracing_subscriber::fmt::init();
