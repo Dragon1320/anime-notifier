@@ -1,4 +1,4 @@
-use std::{env, path};
+use std::{env, net, path};
 
 use serde::{Deserialize, Serialize};
 
@@ -9,8 +9,12 @@ const SEPARATOR: &str = "_";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
+  // example
   pub message: String,
   pub cat: Cat,
+
+  // app
+  pub api: Api,
 }
 
 // example nested config
@@ -19,9 +23,16 @@ pub struct Cat {
   pub colour: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Api {
+  pub ip: net::Ipv4Addr,
+  pub port: u16,
+}
+
 impl Config {
   pub fn load() -> Result<Self, config::ConfigError> {
     // try to load .env file and fail silently on error
+    // TODO: is this the correct way to handle this?
     dotenv::dotenv().ok();
 
     let cfg_path = env::var(PATH_ENV).unwrap_or_else(|_| DEFAULT_PATH.into());

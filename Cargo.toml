@@ -17,9 +17,9 @@ config = { version = "0", default-features = false, features = ["yaml"] }
 serde = { version = "1", features = ["derive"] }
 tracing = "0"
 tracing-subscriber = "0"
+axum = "0"
 dotenv = "0"
 
 #serde_json = "1"
 #reqwest = "0"
-#axum = "0"
 #mongodb = "2"
