@@ -15,6 +15,9 @@ pub struct Config {
 
   // app
   pub api: Api,
+
+  // db
+  pub db: Db,
 }
 
 // example nested config
@@ -27,6 +30,11 @@ pub struct Cat {
 pub struct Api {
   pub ip: net::Ipv4Addr,
   pub port: u16,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Db {
+  pub db_str: String,
 }
 
 impl Config {
