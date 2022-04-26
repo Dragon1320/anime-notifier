@@ -10,3 +10,7 @@ cat:
 api:
   ip: 127.0.0.1
   port: 3000
+
+# mongodb databsae
+db:
+  db_str: MONGO_DB_STRING
