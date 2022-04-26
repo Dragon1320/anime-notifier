@@ -99,8 +99,9 @@ impl Scheduler<tokio::runtime::Handle> {
     });
   }
 
-  pub fn repeating<F>(&self, future: F, duration: std::time::Duration)
+  pub fn repeating<C, F>(&self, future: C, duration: std::time::Duration)
   where
+    C: Fn() -> F + Send + 'static,
     F: Future + Send + 'static,
     F::Output: Send + 'static,
   {
@@ -111,9 +112,11 @@ impl Scheduler<tokio::runtime::Handle> {
     let mut interval = tokio::time::interval_at(start.into(), duration);
 
     self.handle.spawn(async move {
-      interval.tick().await;
+      loop {
+        interval.tick().await;
 
-      handle.spawn(future);
+        handle.spawn(future());
+      }
     });
   }
 }
