@@ -3,7 +3,7 @@ use std::net;
 use axum::{body::Body, routing::get, Router, Server};
 use tracing::info;
 
-use crate::err::BoxResult;
+use crate::error::BoxResult;
 
 pub struct Api {
   router: Router<Body>,
