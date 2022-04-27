@@ -20,7 +20,11 @@ async fn main() -> BoxResult<()> {
     info!("rawrxd");
   };
 
-  sc.repeating(fut_closure, Duration::from_secs(1));
+  let handle = sc.spawn_repeating(fut_closure, Duration::from_millis(500));
+
+  tokio::time::sleep(Duration::from_secs(2)).await;
+
+  handle.abort();
 
   tokio::time::sleep(Duration::from_secs(5)).await;
 

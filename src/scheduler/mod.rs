@@ -1,113 +1,86 @@
-// define cancellable intervals:
-// - pre work started
-// - pre x checkpoint
-// - post x checkpoint
-
-// define guarantees
-// - at least once
-// - at most once
-// - exactly once
-
-// needs:
-// - not use too many resources -> only schedule whats required
-// - persistent/transient timers -> persistent survive a reboot
-// - be a wrapper - we dont interact with tokio outside of the module (and could switch out for different internals without affecting anything)
-// - predictable - any action (such as cancelling a task) should have well defined consequences
-
-// also:
-// - tasks may need to be transactional in nature
-
-// optimisation: instead of scheduling a task, schedule the result processing of that task
-// so for example, we schedule a http request earlier and processed the response at the scheduled time
-
-use std::{future::Future, sync::Arc};
+use std::future::Future;
 
 use crate::error::BoxResult;
 
-trait Stateful {
-  fn init() -> Self;
-  fn update(&self);
-  fn subscribe(&self);
+// i do plan to abstract this at some point so it can be used with executors
+// other than tokio, but i feel like doing it now will severely slow down the poc
+pub struct Scheduler {
+  handle: tokio::runtime::Handle,
 }
 
-pub trait Spawn {
-  fn spawn<F>(&self, future: F)
-  where
-    F: Future + Send + 'static,
-    F::Output: Send + 'static;
-}
+// abstractions:
+// - something that can spawn tasks
+// - something that can sleep
+// - some task that can be spawned
 
-impl Spawn for tokio::runtime::Handle {
-  fn spawn<F>(&self, future: F)
-  where
-    F: Future + Send + 'static,
-    F::Output: Send + 'static,
-  {
-    self.spawn(future);
-  }
-}
-
-pub struct Scheduler<H>
-where
-  H: Spawn,
-{
-  handle: H,
-}
+// NOTES:
+// when scheduling tasks, we do not care about any values produced
+// a scheduled task can be split into 2 stages: waiting + executing
+// - a task must be safe to cancel when waiting
+// - a task might not be safe to cancel when executing (eg. if it produces side-effects)
+// - a task is always safe to cancel when it does not produce side-effects when executing
 
 // for now, all tasks will be transient (ie. they wont persist after a restart)
-impl Scheduler<tokio::runtime::Handle> {
+impl Scheduler {
   pub fn new() -> BoxResult<Self> {
+    // any clones of handle are ok - its reference counted
     let handle = tokio::runtime::Handle::try_current()?;
 
     Ok(Self { handle })
   }
 
-  pub fn immediate<F>(&self, future: F)
+  pub fn spawn_immediate<T, F>(&self, task_fn: F)
   where
-    F: Future + Send + 'static,
-    F::Output: Send + 'static,
+    T: Future + Send + 'static,
+    T::Output: Send + 'static,
+    F: Fn() -> T,
   {
-    self.handle.spawn(future);
+    let task = task_fn();
+
+    self.handle.spawn(task);
   }
 
-  pub fn delayed<F>(&self, future: F, delay: std::time::Duration)
+  pub fn spawn_delayed<T, F>(&self, task_fn: F, delay: std::time::Duration) -> tokio::task::JoinHandle<()>
   where
-    F: Future + Send + 'static,
-    F::Output: Send + 'static,
+    T: Future + Send + 'static,
+    T::Output: Send + 'static,
+    F: Fn() -> T,
   {
-    // handle is reference counted so this is ok
+    let task = task_fn();
     let handle = self.handle.clone();
 
     self.handle.spawn(async move {
       tokio::time::sleep(delay).await;
 
-      handle.spawn(future);
-    });
+      handle.spawn(task);
+    })
   }
 
-  pub fn datetime<F>(&self, future: F, instant: std::time::Instant)
+  pub fn spawn_datetime<T, F>(&self, task_fn: F, instant: std::time::Instant) -> tokio::task::JoinHandle<()>
   where
-    F: Future + Send + 'static,
-    F::Output: Send + 'static,
+    T: Future + Send + 'static,
+    T::Output: Send + 'static,
+    F: Fn() -> T,
   {
+    let task = task_fn();
     let handle = self.handle.clone();
 
     self.handle.spawn(async move {
       tokio::time::sleep_until(instant.into()).await;
 
-      handle.spawn(future);
-    });
+      handle.spawn(task);
+    })
   }
 
-  pub fn repeating<C, F>(&self, future: C, duration: std::time::Duration)
+  pub fn spawn_repeating<T, F>(&self, task_fn: F, duration: std::time::Duration) -> tokio::task::JoinHandle<()>
   where
-    C: Fn() -> F + Send + 'static,
-    F: Future + Send + 'static,
-    F::Output: Send + 'static,
+    T: Future + Send + 'static,
+    T::Output: Send + 'static,
+    F: Fn() -> T + Send + 'static,
   {
     let handle = self.handle.clone();
 
-    // we dont want it to tick instantly (or we could make that a param)
+    // the first tick of interval happens immediately, delay this to interval duration
     let start = std::time::Instant::now() + duration;
     let mut interval = tokio::time::interval_at(start.into(), duration);
 
@@ -115,8 +88,8 @@ impl Scheduler<tokio::runtime::Handle> {
       loop {
         interval.tick().await;
 
-        handle.spawn(future());
+        handle.spawn(task_fn());
       }
-    });
+    })
   }
 }
