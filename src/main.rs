@@ -1,7 +1,9 @@
-use std::time::Duration;
+use std::{future::Future, marker::PhantomData, ops::Add, sync::Arc, time::Duration};
 
+use chrono::{DateTime, Utc};
 use error::BoxResult;
-use scheduler::Scheduler;
+use scheduler::{Scheduler, Timing};
+use tokio::{sync::oneshot, task::JoinHandle};
 use tracing::info;
 
 mod api;
@@ -14,19 +16,22 @@ async fn main() -> BoxResult<()> {
   // setup tracing to output logs to stdout
   tracing_subscriber::fmt::init();
 
-  let sc = Scheduler::new()?;
+  let mut scheduler = Scheduler::new();
 
-  let fut_closure = || async {
-    info!("rawrxd");
-  };
+  let date_time = Utc::now() + chrono::Duration::seconds(2);
 
-  let handle = sc.spawn_repeating(fut_closure, Duration::from_millis(500));
+  scheduler.schedule("rawrxd", Timing::Delayed(date_time));
 
-  tokio::time::sleep(Duration::from_secs(2)).await;
+  scheduler.spawn(
+    "rawrxd",
+    Box::new(|| {
+      Box::pin(async {
+        info!("rawrxd");
+      })
+    }),
+  );
 
-  handle.abort();
-
-  tokio::time::sleep(Duration::from_secs(5)).await;
+  tokio::time::sleep(Duration::from_secs(4)).await;
 
   Ok(())
 }

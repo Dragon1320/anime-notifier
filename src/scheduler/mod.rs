@@ -1,95 +1,103 @@
-use std::future::Future;
+use std::{collections::HashMap, future::Future, pin::Pin, time::Duration};
+
+use chrono::{DateTime, Utc};
+use tokio::{
+  sync::{mpsc, oneshot},
+  task::JoinHandle,
+};
 
 use crate::error::BoxResult;
 
-// i do plan to abstract this at some point so it can be used with executors
-// other than tokio, but i feel like doing it now will severely slow down the poc
-pub struct Scheduler {
-  handle: tokio::runtime::Handle,
+type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
+type FutureFn<T> = Box<dyn Fn() -> BoxFuture<T>>;
+
+// pub fn create_task<F>(future: F) -> FutureFn<F::Output>
+// where
+//   F: Future + Send + 'static,
+//   F::Output: Send + 'static,
+// {
+//   let closure = || Box::pin(future);
+
+//   Box::new(closure)
+// }
+
+pub enum Timing {
+  Immediate,
+  Delayed(DateTime<Utc>),
+  Repeating(Duration),
 }
 
-// abstractions:
-// - something that can spawn tasks
-// - something that can sleep
-// - some task that can be spawned
+pub struct Scheduler {
+  // if this was some threadpool, it would need to be owned
+  // eventually i wanna (possibly) abstract this to work with anything that can spawn tasks
+  runtime: tokio::runtime::Handle,
+  // these can instead be fetched from a database, in which case we would delete records if are no longer needed
+  timings: HashMap<String, Timing>,
+}
 
-// NOTES:
-// when scheduling tasks, we do not care about any values produced
-// a scheduled task can be split into 2 stages: waiting + executing
-// - a task must be safe to cancel when waiting
-// - a task might not be safe to cancel when executing (eg. if it produces side-effects)
-// - a task is always safe to cancel when it does not produce side-effects when executing
-
-// for now, all tasks will be transient (ie. they wont persist after a restart)
 impl Scheduler {
-  pub fn new() -> BoxResult<Self> {
-    // any clones of handle are ok - its reference counted
-    let handle = tokio::runtime::Handle::try_current()?;
+  pub fn new() -> Self {
+    let runtime = tokio::runtime::Handle::current();
 
-    Ok(Self { handle })
+    Self {
+      runtime,
+      timings: HashMap::new(),
+    }
   }
 
-  pub fn spawn_immediate<T, F>(&self, task_fn: F)
-  where
-    T: Future + Send + 'static,
-    T::Output: Send + 'static,
-    F: Fn() -> T,
-  {
-    let task = task_fn();
-
-    self.handle.spawn(task);
+  pub fn schedule(&mut self, id: &str, timing: Timing) {
+    self.timings.insert(id.to_string(), timing);
   }
 
-  pub fn spawn_delayed<T, F>(&self, task_fn: F, delay: std::time::Duration) -> tokio::task::JoinHandle<()>
+  // the id is used for fetching scheduling info
+  pub fn spawn<T>(&self, id: &str, future_fn: FutureFn<T>)
   where
-    T: Future + Send + 'static,
-    T::Output: Send + 'static,
-    F: Fn() -> T,
+    T: Send + 'static,
   {
-    let task = task_fn();
-    let handle = self.handle.clone();
+    let timing = self.timings.get(id).unwrap();
 
-    self.handle.spawn(async move {
-      tokio::time::sleep(delay).await;
+    match timing {
+      Timing::Immediate => {
+        let future = future_fn();
 
-      handle.spawn(task);
-    })
-  }
-
-  pub fn spawn_datetime<T, F>(&self, task_fn: F, instant: std::time::Instant) -> tokio::task::JoinHandle<()>
-  where
-    T: Future + Send + 'static,
-    T::Output: Send + 'static,
-    F: Fn() -> T,
-  {
-    let task = task_fn();
-    let handle = self.handle.clone();
-
-    self.handle.spawn(async move {
-      tokio::time::sleep_until(instant.into()).await;
-
-      handle.spawn(task);
-    })
-  }
-
-  pub fn spawn_repeating<T, F>(&self, task_fn: F, duration: std::time::Duration) -> tokio::task::JoinHandle<()>
-  where
-    T: Future + Send + 'static,
-    T::Output: Send + 'static,
-    F: Fn() -> T + Send + 'static,
-  {
-    let handle = self.handle.clone();
-
-    // the first tick of interval happens immediately, delay this to interval duration
-    let start = std::time::Instant::now() + duration;
-    let mut interval = tokio::time::interval_at(start.into(), duration);
-
-    self.handle.spawn(async move {
-      loop {
-        interval.tick().await;
-
-        handle.spawn(task_fn());
+        self.runtime.spawn(future);
       }
-    })
+      // we may run into a potential issue here - if we call schedule()
+      // and only call this after the set date, this will error
+      Timing::Delayed(date_time) => {
+        let delay = date_time.signed_duration_since(Utc::now());
+        let future = future_fn();
+
+        self.runtime.spawn(async move {
+          tokio::time::sleep(delay.to_std().unwrap()).await;
+
+          future.await;
+        });
+      }
+      Timing::Repeating(duration) => {
+        // let start = std::time::Instant::now() + *duration;
+        // let mut interval = tokio::time::interval_at(start.into(), *duration);
+
+        // self.runtime.spawn(async move {
+        //   loop {
+        //     interval.tick().await;
+
+        //     let future = future_fn();
+        //     future.await;
+        //   }
+        // });
+
+        todo!();
+      }
+    }
+
+    // since we specify the return type here, we can return a channel which will produce *something* *eventually*
+    // BUT, we can also store a type-erased future type and manage its scheduling internally as we see fit
+
+    // todo!();
+  }
+
+  pub fn abort(&self, id: &str) {
+    todo!();
   }
 }
