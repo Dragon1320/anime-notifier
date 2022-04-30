@@ -5,7 +5,7 @@ use tracing::{debug, info};
 
 use util::BoxResult;
 
-use crate::scheduler::task::Timing;
+use crate::scheduler::{task::Timing, Scheduler};
 
 mod api;
 mod config;
@@ -17,7 +17,6 @@ async fn main() -> BoxResult<()> {
   // setup tracing to output logs to stdout
   tracing_subscriber::fmt::init();
 
-  // TODO: add logging to config
   let config = config::Config::load()?;
 
   // some config/logging examples
@@ -27,30 +26,37 @@ async fn main() -> BoxResult<()> {
   // run with: RUST_LOG=debug cargo run
   debug!("{:?}", config);
 
-  // let anime_api = api::Api::new();
-  // anime_api.serve(config.api.ip, config.api.port).await?;
+  // scheduler example
+  let mut scheduler = Scheduler::new()?;
 
-  let mut s = scheduler::Scheduler::new()?;
+  let task_id = "crunchyroll_fetch";
 
-  // TODO: why is async move allowed here?
-  // TODO: move ||?
-  // TODO: || async move?
-  let mut rx = s.register_task("rawrxd", 16, |tx: mpsc::Sender<()>| async move {
-    tokio::time::sleep(Duration::from_millis(1000)).await;
+  let owo = "owo".to_string();
 
-    info!("rawrxd");
+  // register a task handler than can spawn tasks later, given the task_id
+  let mut rx_chan = scheduler.register_task(task_id, 16, move |tx_chan: mpsc::Sender<String>| {
+    // we can capture outside variables
+    let message = owo.clone();
 
-    tx.send(()).await;
+    async move {
+      // sleep for a second
+      tokio::time::sleep(Duration::from_millis(1000)).await;
+
+      // send a message in our channel
+      tx_chan.send(message).await.unwrap();
+    }
   })?;
 
-  s.spawn_task("rawrxd", Timing::Immediate)?;
-  s.remove_task("rawrxd")?;
+  // spawn an instance of the task above to run as soon as possible
+  scheduler.spawn_task(task_id, Timing::Immediate)?;
 
-  info!("{:?}", rx.recv().await);
-  info!("{:?}", rx.recv().await);
+  // de-register the task handler
+  scheduler.remove_task(task_id)?;
 
-  // sleep so tasks have time to complete before we exit
-  tokio::time::sleep(Duration::from_millis(2000)).await;
+  // this will only exit when no more messages will be sent (ie. the task handler is removed and all its instances drop tx_chan)
+  while let Some(message) = rx_chan.recv().await {
+    info!("{}", message);
+  }
 
   Ok(())
 }

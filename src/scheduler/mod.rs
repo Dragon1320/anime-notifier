@@ -23,6 +23,8 @@ pub struct Scheduler {
   tasks: HashMap<String, TaskFn>,
 }
 
+// TODO: some helper fns (eg. to see if a handler with some id exists)
+// TODO: add logging (tracing stuff will probably come in useful here)
 impl Scheduler {
   pub fn new() -> BoxResult<Self> {
     // for now just try to get a handle to the current tokio executor, this will probably be expanded post-poc
@@ -42,6 +44,7 @@ impl Scheduler {
   // - if we wanna box the future, it needs to be pinned and so cannot be moved
 
   // TODO: we could always wrap the future such that any value it returns gets sent over the channel?
+  // if we did this we could probably remove a layer of closures (would be fine with some more boxed types)
   pub fn register_task<T, F, R>(&mut self, id: &str, buffer: usize, task_fn: T) -> SchedulerResult<mpsc::Receiver<R>>
   where
     T: Fn(mpsc::Sender<R>) -> F + 'static,
