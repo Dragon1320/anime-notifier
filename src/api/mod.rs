@@ -11,7 +11,7 @@ pub struct Api {
 
 impl Api {
   pub fn new() -> Self {
-    let router = Router::new().route("/", get(|| async {}));
+    let router = Router::new().route("/healthz", get(|| async {}));
 
     Self { router }
   }

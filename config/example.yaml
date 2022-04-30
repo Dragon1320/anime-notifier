@@ -1,16 +1,15 @@
-# you can set this with: NEKO_MESSAGE
-# note: env vars override fields set in the yaml
-message: にゃ～
-
-# you can set this with: NEKO_CAT_COLOUR
+# example
+# these fields can be set with the env vars NEKO_CAT_MESSAGE and NEKO_CAT_COLOUR
+# env var values override those set in the config file
 cat:
+  message: にゃ～
   colour: blue
 
-# app
+# rest api
 api:
   ip: 127.0.0.1
   port: 3000
 
 # mongodb databsae
-db:
-  db_str: MONGO_DB_STRING
+mongo:
+  dbstr: NEKO_MONGO_DBSTR

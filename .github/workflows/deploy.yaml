@@ -1,0 +1,31 @@
+name: Deploy to Kubernetes
+
+on:
+  workflow_call:
+
+env:
+  KUBE_CLUSTER: k8s-bandsy
+  HELM_NAMESPACE: anime-notifier
+  HELM_RELEASE: ${{ github.repository }}
+  HELM_CHART: ./chart
+
+jobs:
+  kube:
+    name: Kubernetes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Setup doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+      - name: Save kubeconfig
+        run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.KUBE_CLUSTER }}
+      - name: Setup helm
+        run: |-
+          curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
+          chmod 700 get_helm.sh
+          ./get_helm.sh
+      - name: Update deployment
+        run: helm upgrade ${{ env.HELM_RELEASE }} ${{ env.HELM_CHART }} --install --atomic --namespace ${{ env.HELM_NAMESPACE }}
