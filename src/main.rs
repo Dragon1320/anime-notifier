@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use tokio::sync::mpsc;
 use tracing::{debug, info};
 
 use error::BoxResult;
@@ -29,12 +30,13 @@ async fn main() -> BoxResult<()> {
 
   let mut s = scheduler::Scheduler::new()?;
 
-  s.register_timing("rawrxd", scheduler::Timing::Immediate)?;
-
-  s.spawn_task("rawrxd", |_| async {
+  let rx = s.register_task("rawrxd", 16, |_tx: mpsc::Sender<()>| async {
     info!("rawrxd");
   })?;
 
+  s.spawn_task("rawrxd", scheduler::Timing::Immediate)?;
+
+  // sleep so tasks have time to complete before we exit
   tokio::time::sleep(Duration::from_millis(500)).await;
 
   Ok(())
