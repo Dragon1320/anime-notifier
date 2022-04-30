@@ -1,74 +1,31 @@
-use std::{collections::HashMap, error, fmt, future::Future, pin::Pin};
+use std::{collections::HashMap, future::Future};
 
-use chrono::{DateTime, Duration, Utc};
-use tokio::{
-  sync::{mpsc, watch},
-  task,
+use tokio::sync::mpsc;
+
+use crate::util::BoxResult;
+
+use self::{
+  error::{SchedulerError, SchedulerResult},
+  task::{TaskFn, TaskHandle, Timing},
 };
 
-use crate::error::BoxResult;
+pub mod error;
+pub mod task;
 
-type SchedulerResult<T> = Result<T, SchedulerError>;
-
-type BoxFuture = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
-type TaskFn = Box<dyn Fn() -> BoxFuture>;
-
-#[derive(Debug)]
-pub enum SchedulerError {
-  DuplicateTaskId(String),
-  TaskNotFound(String),
-}
-
-impl fmt::Display for SchedulerError {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      SchedulerError::DuplicateTaskId(id) => write!(f, "a task already exists with the id {}", id),
-      SchedulerError::TaskNotFound(id) => write!(f, "could not find a task with the id {}", id),
-    }
-  }
-}
-
-impl error::Error for SchedulerError {}
-
-#[derive(Debug)]
-pub enum Timing {
-  Immediate,
-  DateTime(DateTime<Utc>),
-  Repeating(Duration),
-}
-
-pub struct TaskHandle<T> {
-  pub receiver: watch::Receiver<T>,
-
-  handle: tokio::task::JoinHandle<T>,
-}
-
-impl<T> TaskHandle<T> {
-  pub fn new(receiver: watch::Receiver<T>, handle: tokio::task::JoinHandle<T>) -> Self {
-    Self { handle, receiver }
-  }
-
-  pub fn abort(self) {
-    self.handle.abort();
-  }
-}
-
-// #[derive(Debug)]
 pub struct Scheduler {
-  // we can use tokio::spawn instead but i wanna abstract this further in the future
-  // and this is (probably maybe) a good first step towards doing so
+  // we can use tokio::spawn() instead, but i wanna tie our ability to schedule tasks to the lifetime
+  // of scheduler, this will be useful later if we choose to switch this out to something that does
+  // require to be owned/alive to schedule tasks
   runtime: tokio::runtime::Handle,
 
-  // TODO: ...
+  // all tasks are stored as handler functions which can later be called to produce a future
+  // these can continuously produce futures and so can be scheduled multiple times
   tasks: HashMap<String, TaskFn>,
 }
 
-// TODO: ...
-// we currently dont clear useless timings (eg. dates in the past), this will not
-// be an issue post-poc as we will store these in a db where these are cleaned up
-
 impl Scheduler {
   pub fn new() -> BoxResult<Self> {
+    // for now just try to get a handle to the current tokio executor, this will probably be expanded post-poc
     let runtime = tokio::runtime::Handle::try_current()?;
 
     Ok(Self {
@@ -77,12 +34,17 @@ impl Scheduler {
     })
   }
 
-  // TODO: should make sure these generics can always be inferred from input
-  // we only need type info for this to return a correctly typed channel
-  // then we can store the future-producing fn in type-erased form
+  // return a channel that may produce *something* *eventually*
+  // after creating the channel, we no longer need type info - we can store the future-producing fn in type-erased form
+
+  // why generics over trait objects:
+  // - we can handle the boxing and pinning here, so we have a more ergonomic api
+  // - if we wanna box the future, it needs to be pinned and so cannot be moved
+
+  // TODO: we could always wrap the future such that any value it returns gets sent over the channel?
   pub fn register_task<T, F, R>(&mut self, id: &str, buffer: usize, task_fn: T) -> SchedulerResult<mpsc::Receiver<R>>
   where
-    T: Fn(mpsc::Sender<R>) -> F + Send + 'static,
+    T: Fn(mpsc::Sender<R>) -> F + 'static,
     F: Future<Output = ()> + Send + 'static,
     R: 'static,
   {
@@ -93,6 +55,7 @@ impl Scheduler {
     let (tx, rx) = mpsc::channel::<R>(buffer);
 
     // we need to do some closure magic to pass a clone of sender into each instance of the task
+    // the mpsc sender will live as long as 1. a task is using it and 2. the task handler is registered in the executor
     self.tasks.insert(
       id.to_string(),
       Box::new(move || {
@@ -105,10 +68,9 @@ impl Scheduler {
     Ok(rx)
   }
 
-  // TODO: validate these claims!
-  // this only removes the task handler, it does not stop any currently running futures
-  // abort should be called on all scheduled task handles to stop all running futures
-  // the associated channel receiver will return none when all senders are dropped (ie. all futures are finished)
+  // this only removes the task handler, it does not abort any currently running futures
+  // to ensure no instances of this task are running, we need to call abort() on all its task handles
+  // once the task is removed and all its instances drop the mpsc sender, its associated channel will close
   pub fn remove_task(&mut self, id: &str) -> SchedulerResult<()> {
     // immediately drop the task handler
     let _ = self
@@ -119,10 +81,10 @@ impl Scheduler {
     Ok(())
   }
 
-  // TODO: rewrite
-  // since we specify the future type here, we can return a channel which will produce *something* *eventually*
-  // BUT, we can also store a type-erased future and manage its scheduling internally as we see fit
-  pub fn spawn_task(&self, id: &str, timing: Timing) -> SchedulerResult<task::JoinHandle<()>> {
+  // schedule a task that has had its handler fn already registered
+  // post-poc these timings can come from a database for tasks which need to persist between restarts - we would first
+  // register all required handlers with register_task() and then call some restore() to restore the scheduler state
+  pub fn spawn_task(&self, id: &str, timing: Timing) -> SchedulerResult<TaskHandle> {
     let task_fn = self
       .tasks
       .get(id)
@@ -133,7 +95,9 @@ impl Scheduler {
         let future = task_fn();
         let handle = self.runtime.spawn(future);
 
-        Ok(handle)
+        let task_handle = TaskHandle::new(handle);
+
+        Ok(task_handle)
       }
       // Timing::DateTime(date_time) => {}
       // Timing::Repeating(interval_duration) => {}

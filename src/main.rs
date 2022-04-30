@@ -3,12 +3,14 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tracing::{debug, info};
 
-use error::BoxResult;
+use util::BoxResult;
+
+use crate::scheduler::task::Timing;
 
 mod api;
 mod config;
-mod error;
 mod scheduler;
+mod util;
 
 #[tokio::main]
 async fn main() -> BoxResult<()> {
@@ -30,14 +32,25 @@ async fn main() -> BoxResult<()> {
 
   let mut s = scheduler::Scheduler::new()?;
 
-  let rx = s.register_task("rawrxd", 16, |_tx: mpsc::Sender<()>| async {
+  // TODO: why is async move allowed here?
+  // TODO: move ||?
+  // TODO: || async move?
+  let mut rx = s.register_task("rawrxd", 16, |tx: mpsc::Sender<()>| async move {
+    tokio::time::sleep(Duration::from_millis(1000)).await;
+
     info!("rawrxd");
+
+    tx.send(()).await;
   })?;
 
-  s.spawn_task("rawrxd", scheduler::Timing::Immediate)?;
+  s.spawn_task("rawrxd", Timing::Immediate)?;
+  s.remove_task("rawrxd")?;
+
+  info!("{:?}", rx.recv().await);
+  info!("{:?}", rx.recv().await);
 
   // sleep so tasks have time to complete before we exit
-  tokio::time::sleep(Duration::from_millis(500)).await;
+  tokio::time::sleep(Duration::from_millis(2000)).await;
 
   Ok(())
 }
