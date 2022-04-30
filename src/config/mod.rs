@@ -32,6 +32,7 @@ pub struct Api {
   pub port: u16,
 }
 
+// TODO: add logging to config
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Db {
   pub db_str: String,
