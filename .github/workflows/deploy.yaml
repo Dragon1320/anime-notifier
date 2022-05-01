@@ -1,0 +1,47 @@
+name: Deploy to Kubernetes
+
+on:
+  workflow_call:
+  push:
+    branches:
+      - master
+
+env:
+  KUBE_CLUSTER: k8s-bandsy
+  HELM_RELEASE: ${{ github.repository }}
+  HELM_NAMESPACE: anime-notifier
+  HELM_CHART: ./chart
+
+jobs:
+  check:
+    name: Check
+    uses: ./.github/workflows/check.yaml
+  build:
+    name: Build
+    needs: check
+    uses: ./.github/workflows/build.yaml
+  deploy:
+    name: Kubernetes
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Setup doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+      - name: Save kubeconfig
+        run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.KUBE_CLUSTER }}
+      - name: Update deployment
+        uses: deliverybot/helm@v1
+        with:
+          release: ${{ env.HELM_RELEASE }}
+          namespace: ${{ env.HELM_NAMESPACE }}
+          chart: ${{ env.HELM_CHART }}
+          task: upgrade
+          atomic: true
+          values: |
+            mongo:
+              dbstr: ${{ secrets.MONGO_DBSTR }}
+              ca: ${{ secrets.MONGO_CA }}

@@ -1,0 +1,10 @@
+apiVersion: v2
+name: anime-notifier
+description: The soon-to-be best anime notification service!
+
+# TODO: find some way to auto-increment these when needed
+type: application
+# chart version
+version: 0.1.0
+# app version
+appVersion: 0.1.0

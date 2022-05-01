@@ -1,0 +1,23 @@
+# deployment settings
+ports:
+  docker: 3000
+  service: 80
+routes:
+  health: /healthz
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+image:
+  user: dragon1320
+  name: anime-notifier
+  version: master
+replicas: 1
+
+# secrets - these need to be set when deploying
+mongo:
+  dbstr: mongodb connection string
+  ca: mongodb ca cert for tls

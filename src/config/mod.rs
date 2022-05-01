@@ -10,19 +10,20 @@ const SEPARATOR: &str = "_";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
   // example
-  pub message: String,
   pub cat: Cat,
 
-  // app
+  // rest api
   pub api: Api,
 
   // db
+  #[serde(rename(deserialize = "mongo"))]
   pub db: Db,
 }
 
 // example nested config
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Cat {
+  pub message: String,
   pub colour: String,
 }
 
@@ -32,12 +33,13 @@ pub struct Api {
   pub port: u16,
 }
 
-// TODO: add logging to config
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Db {
+  #[serde(rename(deserialize = "dbstr"))]
   pub db_str: String,
 }
 
+// TODO: add logging to config
 impl Config {
   pub fn load() -> Result<Self, config::ConfigError> {
     // try to load .env file and fail silently on error
