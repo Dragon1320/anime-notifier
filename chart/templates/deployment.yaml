@@ -86,11 +86,16 @@ spec:
         volumeMounts:
         - name: "{{ .Release.Name }}-config"
           mountPath: /etc/neko
+        - name: "{{ .Release.Name }}-cert"
+          mountPath: /etc/tls
         - name: temp
           mountPath: /tmp
       volumes:
       - name: "{{ .Release.Name }}-config"
         configMap:
           name: "{{ .Release.Name }}-config"
+      - name: "{{ .Release.Name }}-cert"
+        secret:
+          secretName: "{{ .Release.Name }}-cert"
       - name: temp
         emptyDir: {}

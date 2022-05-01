@@ -17,6 +17,7 @@ image:
   version: master
 replicas: 1
 
-# secrets
+# secrets - these need to be set when deploying
 mongo:
-  dbstr: NEKO_MONGO_DBSTR
+  dbstr: mongodb connection string
+  ca: mongodb ca cert for tls

@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "{{ .Release.Name }}-cert"
+  namespace: {{ .Release.Namespace }}
+type: Opaque
+data:
+  ca.crt: {{ .Values.mongo.ca | b64enc }}
