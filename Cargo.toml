@@ -19,7 +19,11 @@ tracing = "0"
 tracing-subscriber = "0"
 axum = "0"
 dotenv = "0"
+mongodb = "2"
+futures-util = "0.3.21"
+chrono = "0"
+bson = { version = "2", features = ["chrono-0_4"] }
+hex = "0"
 
 #serde_json = "1"
 #reqwest = "0"
-#mongodb = "2"

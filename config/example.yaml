@@ -13,4 +13,6 @@ api:
 
 # mongodb databsae
 db:
-  db_str: MONGO_DB_STRING
+  db_str: MONGODB_STR
+  db_name: anime-notifier
+  collection_name: requests

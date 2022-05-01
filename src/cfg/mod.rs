@@ -3,7 +3,7 @@ use std::{env, net, path};
 use serde::{Deserialize, Serialize};
 
 const PATH_ENV: &str = "NEKO_CONFIG_PATH";
-const DEFAULT_PATH: &str = "/etc/neko/config.yaml";
+const DEFAULT_PATH: &str = "./config/example.yaml";
 const PREFIX: &str = "NEKO";
 const SEPARATOR: &str = "_";
 
@@ -35,6 +35,8 @@ pub struct Api {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Db {
   pub db_str: String,
+  pub db_name: String,
+  pub collection_name: String,
 }
 
 impl Config {
