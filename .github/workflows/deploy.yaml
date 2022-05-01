@@ -2,6 +2,9 @@ name: Deploy to Kubernetes
 
 on:
   workflow_call:
+  push:
+    branches:
+      - master
 
 env:
   KUBE_CLUSTER: k8s-bandsy
@@ -10,8 +13,16 @@ env:
   HELM_CHART: ./chart
 
 jobs:
-  kube:
+  check:
+    name: Check
+    uses: ./.github/workflows/check.yaml
+  build:
+    name: Build
+    needs: check
+    uses: ./.github/workflows/build.yaml
+  deploy:
     name: Kubernetes
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -30,3 +41,7 @@ jobs:
           chart: ${{ env.HELM_CHART }}
           task: upgrade
           atomic: true
+          values: |
+            mongo:
+              dbstr: ${{ secrets.MONGO_DBSTR }}
+              ca: ${{ secrets.MONGO_CA }}

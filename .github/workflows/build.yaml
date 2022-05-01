@@ -2,9 +2,6 @@ name: Build Docker image
 
 on:
   workflow_call:
-  push:
-    branches:
-      - master
 
 env:
   REGISTRY_NAME: ghcr.io
@@ -13,9 +10,6 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  check:
-    name: Check
-    uses: ./.github/workflows/check.yaml
   build:
     name: Docker
     needs: check
@@ -50,7 +44,3 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-  deploy:
-    name: Deploy
-    needs: build
-    uses: ./.github/workflows/deploy.yaml
