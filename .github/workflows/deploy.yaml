@@ -8,7 +8,7 @@ on:
 
 env:
   KUBE_CLUSTER: k8s-bandsy
-  HELM_RELEASE: ${{ github.repository }}
+  HELM_RELEASE: ${{ github.event.repository.name }}
   HELM_NAMESPACE: anime-notifier
   HELM_CHART: ./chart
 
@@ -27,6 +27,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+      - name: Setup helm
+        run: |
+          curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
+          chmod 700 get_helm.sh
+          ./get_helm.sh
       - name: Setup doctl
         uses: digitalocean/action-doctl@v2
         with:
@@ -34,14 +39,12 @@ jobs:
       - name: Save kubeconfig
         run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.KUBE_CLUSTER }}
       - name: Update deployment
-        uses: deliverybot/helm@v1
-        with:
-          release: ${{ env.HELM_RELEASE }}
-          namespace: ${{ env.HELM_NAMESPACE }}
-          chart: ${{ env.HELM_CHART }}
-          task: upgrade
-          atomic: true
-          values: |
-            mongo:
-              dbstr: ${{ secrets.MONGO_DBSTR }}
-              ca: ${{ secrets.MONGO_CA }}
+        run: |
+          helm upgrade \
+            ${{ env.HELM_RELEASE }} \
+            ${{ env.HELM_CHART }} \
+            --namespace ${{ env.HELM_NAMESPACE }} \
+            --install \
+            --atomic \
+            --set-string mongo.dbstr=${{ secrets.MONGO_DBSTR }} \
+            --set-string mongo.ca=${{ secrets.MONGO_CA }}
