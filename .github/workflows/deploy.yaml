@@ -46,5 +46,5 @@ jobs:
             --namespace ${{ env.HELM_NAMESPACE }} \
             --install \
             --atomic \
-            --set-string mongo.dbstr=${{ secrets.MONGO_DBSTR }} \
-            --set-string mongo.ca=${{ secrets.MONGO_CA }}
+            --set-string mongo.dbstr='${{ secrets.MONGO_DBSTR }}' \
+            --set-string mongo.ca='${{ secrets.MONGO_CA }}'
