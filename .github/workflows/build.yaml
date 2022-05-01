@@ -12,7 +12,6 @@ env:
 jobs:
   build:
     name: Docker
-    needs: check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
