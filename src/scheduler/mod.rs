@@ -1,5 +1,6 @@
-use std::{collections::HashMap, future::Future};
+use std::{collections::HashMap, future::Future, sync::Arc};
 
+use serde::ser::Error;
 use tokio::sync::mpsc;
 
 use crate::util::BoxResult;
@@ -102,9 +103,59 @@ impl Scheduler {
 
         Ok(task_handle)
       }
-      // Timing::DateTime(date_time) => {}
-      // Timing::Repeating(interval_duration) => {}
-      _ => todo!("complete the rest of the scheduler issues"),
+      Timing::DateTime(date_time) => {
+        // TODO: better error handling
+        let duration = (date_time - chrono::Utc::now()).to_std().unwrap();
+
+        let future = task_fn();
+        let handle = self.runtime.spawn(async move {
+          tokio::time::sleep(duration).await;
+
+          future.await;
+        });
+
+        let task_handle = TaskHandle::new(handle);
+
+        Ok(task_handle)
+      }
+      Timing::Delayed(duration) => {
+        // TODO: better error handling
+        let duration = duration.to_std().unwrap();
+
+        let future = task_fn();
+        let handle = self.runtime.spawn(async move {
+          tokio::time::sleep(duration).await;
+
+          future.await;
+        });
+
+        let task_handle = TaskHandle::new(handle);
+
+        Ok(task_handle)
+      }
+      Timing::Repeating(interval_duration) => {
+        // TODO: better error handling
+        let duration = interval_duration.to_std().unwrap();
+        // we set an interval <duration> in the future, since otherwise the event would fire instantly
+        let mut interval = tokio::time::interval_at(tokio::time::Instant::now() + duration, duration);
+
+        // let a = Arc::new(task_fn);
+
+        let handle = self.runtime.spawn(async move {
+          // let a = a.clone();
+
+          loop {
+            interval.tick().await;
+
+            // let future = task_fn();
+            // future.into().await;
+          }
+        });
+
+        let task_handle = TaskHandle::new(handle);
+
+        Ok(task_handle)
+      }
     }
   }
 }

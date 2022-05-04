@@ -1,4 +1,4 @@
-use std::{future::Future, pin::Pin};
+use std::{future::Future, pin::Pin, sync::Arc};
 
 use chrono::{DateTime, Duration, Utc};
 use tokio::task::JoinHandle;
