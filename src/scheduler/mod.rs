@@ -1,5 +1,6 @@
-use std::{collections::HashMap, future::Future};
+use std::{collections::HashMap, future::Future, sync::Arc};
 
+use serde::ser::Error;
 use tokio::sync::mpsc;
 
 use crate::util::BoxResult;
@@ -47,9 +48,9 @@ impl Scheduler {
   // if we did this we could probably remove a layer of closures (would be fine with some more boxed types)
   pub fn register_task<T, F, R>(&mut self, id: &str, buffer: usize, task_fn: T) -> SchedulerResult<mpsc::Receiver<R>>
   where
-    T: Fn(mpsc::Sender<R>) -> F + 'static,
+    T: Fn(mpsc::Sender<R>) -> F + Send + Sync + 'static,
     F: Future<Output = ()> + Send + 'static,
-    R: 'static,
+    R: Send + 'static,
   {
     if self.tasks.contains_key(id) {
       return Err(SchedulerError::DuplicateTaskId(id.to_string()));
@@ -61,7 +62,7 @@ impl Scheduler {
     // the mpsc sender will live as long as 1. a task is using it and 2. the task handler is registered in the executor
     self.tasks.insert(
       id.to_string(),
-      Box::new(move || {
+      Arc::new(move || {
         let tx = tx.clone();
 
         Box::pin(task_fn(tx))
@@ -102,9 +103,57 @@ impl Scheduler {
 
         Ok(task_handle)
       }
-      // Timing::DateTime(date_time) => {}
-      // Timing::Repeating(interval_duration) => {}
-      _ => todo!("complete the rest of the scheduler issues"),
+      Timing::DateTime(date_time) => {
+        // TODO: better error handling
+        let duration = (date_time - chrono::Utc::now()).to_std().unwrap();
+
+        let future = task_fn();
+        let handle = self.runtime.spawn(async move {
+          tokio::time::sleep(duration).await;
+
+          future.await;
+        });
+
+        let task_handle = TaskHandle::new(handle);
+
+        Ok(task_handle)
+      }
+      Timing::Delayed(duration) => {
+        // TODO: better error handling
+        let duration = duration.to_std().unwrap();
+
+        let future = task_fn();
+        let handle = self.runtime.spawn(async move {
+          tokio::time::sleep(duration).await;
+
+          future.await;
+        });
+
+        let task_handle = TaskHandle::new(handle);
+
+        Ok(task_handle)
+      }
+      Timing::Repeating(interval_duration) => {
+        // TODO: better error handling
+        let duration = interval_duration.to_std().unwrap();
+        // we set an interval <duration> in the future, since otherwise the event would fire instantly
+        let mut interval = tokio::time::interval_at(tokio::time::Instant::now() + duration, duration);
+
+        let task_fn = task_fn.clone();
+
+        let handle = self.runtime.spawn(async move {
+          loop {
+            interval.tick().await;
+
+            let future = task_fn();
+            future.await;
+          }
+        });
+
+        let task_handle = TaskHandle::new(handle);
+
+        Ok(task_handle)
+      }
     }
   }
 }
