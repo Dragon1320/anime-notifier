@@ -48,9 +48,9 @@ impl Scheduler {
   // if we did this we could probably remove a layer of closures (would be fine with some more boxed types)
   pub fn register_task<T, F, R>(&mut self, id: &str, buffer: usize, task_fn: T) -> SchedulerResult<mpsc::Receiver<R>>
   where
-    T: Fn(mpsc::Sender<R>) -> F + 'static,
+    T: Fn(mpsc::Sender<R>) -> F + Send + Sync + 'static,
     F: Future<Output = ()> + Send + 'static,
-    R: 'static,
+    R: Send + 'static,
   {
     if self.tasks.contains_key(id) {
       return Err(SchedulerError::DuplicateTaskId(id.to_string()));
@@ -62,7 +62,7 @@ impl Scheduler {
     // the mpsc sender will live as long as 1. a task is using it and 2. the task handler is registered in the executor
     self.tasks.insert(
       id.to_string(),
-      Box::new(move || {
+      Arc::new(move || {
         let tx = tx.clone();
 
         Box::pin(task_fn(tx))
@@ -139,16 +139,14 @@ impl Scheduler {
         // we set an interval <duration> in the future, since otherwise the event would fire instantly
         let mut interval = tokio::time::interval_at(tokio::time::Instant::now() + duration, duration);
 
-        // let a = Arc::new(task_fn);
+        let task_fn = task_fn.clone();
 
         let handle = self.runtime.spawn(async move {
-          // let a = a.clone();
-
           loop {
             interval.tick().await;
 
-            // let future = task_fn();
-            // future.into().await;
+            let future = task_fn();
+            future.await;
           }
         });
 
